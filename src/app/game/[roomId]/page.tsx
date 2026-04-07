@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useSocket } from "../../../context/SocketContext";
+import { useRealtime } from "../../../context/RealtimeContext";
 import { useRouter } from "next/navigation";
 import { Game, Phase } from "@/types/game";
 import dynamic from "next/dynamic";
@@ -27,7 +27,7 @@ function formatGuessFeedback(bulls: number, cows: number): string {
 }
 
 export default function GameRoom() {
-  const { socket } = useSocket();
+  const { realtime, clientId } = useRealtime();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -44,53 +44,47 @@ export default function GameRoom() {
   const [opponentLeft, setOpponentLeft] = useState(false);
   const [copied, setCopied] = useState(false);
   const guessRef = useRef<HTMLInputElement>(null);
-  const opponent = game?.players.find((p) => p.id !== socket?.id);
-  const myPlayer = game?.players.find((p) => p.id === socket?.id);
-  const isMyTurn = game ? game.players[game.turn]?.id === socket?.id : false;
+  const opponent = game?.players.find((p) => p.id !== clientId);
+  const myPlayer = game?.players.find((p) => p.id === clientId);
+  const isMyTurn = game ? game.players[game.turn]?.id === clientId : false;
   const winner = game?.winner ? game.players.find((p) => p.id === game.winner) : null;
-  const iWon = winner?.id === socket?.id;
+  const iWon = winner?.id === clientId;
 
   // Handle incoming events
   useEffect(() => {
-    if (!socket) return;
+    if (!realtime || !clientId || !roomId) return;
 
-    // Host: receives their own game right away via navigation state
-    // but also needs to listen for when opponent joins
-    socket.on("gameStarted", ({ game: g }: { game: Game }) => {
+    const channel = realtime.channels.get(`room:${roomId}`);
+
+    const onState = (msg: { data?: unknown }) => {
+      const g = (msg?.data ?? null) as Game | null;
+      if (!g) return;
       setGame(g);
-      setPhase("code");
-    });
+      setPhase(g.phase);
+    };
 
-    socket.on("codeSet", ({ game: g }: { game: Game }) => {
-      setGame(g);
-    });
-
-    socket.on("playPhase", ({ game: g }: { game: Game }) => {
-      setGame(g);
-      setPhase("play");
-    });
-
-    socket.on("updateGame", ({ game: g }: { game: Game }) => {
-      setGame(g);
-      if (g.phase === "done") setPhase("done");
-    });
-
-    socket.on("playerLeft", () => {
+    const onSessionEnded = () => {
       setOpponentLeft(true);
-    });
-    socket.on("sessionEnded", () => {
-      setOpponentLeft(true);
+    };
+
+    channel.subscribe("state", onState);
+    channel.subscribe("sessionEnded", onSessionEnded);
+
+    // Fetch last known state from history so refresh works.
+    void channel.history({ limit: 1 }).then((page) => {
+      const item = page.items[0] as unknown as { name?: unknown; data?: unknown } | undefined;
+      if (item && item.name === "state" && item.data) {
+        const g = item.data as Game;
+        setGame(g);
+        setPhase(g.phase);
+      }
     });
 
     return () => {
-      socket.off("gameStarted");
-      socket.off("codeSet");
-      socket.off("playPhase");
-      socket.off("updateGame");
-      socket.off("playerLeft");
-      socket.off("sessionEnded");
+      channel.unsubscribe("state", onState);
+      channel.unsubscribe("sessionEnded", onSessionEnded);
     };
-  }, [socket]);
+  }, [realtime, clientId, roomId]);
 
   // Focus guess input on play phase when it's our turn
   useEffect(() => {
@@ -117,20 +111,48 @@ export default function GameRoom() {
     const err = validateCode(codeInput);
     if (err) return setCodeError(err);
     setCodeError("");
-    socket?.emit("setCode", { roomId, code: codeInput });
-    setCodeLocked(true);
+    if (!clientId) return setCodeError("Connecting…");
+    void fetch("/api/game/setCode", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ roomId, code: codeInput, clientId }),
+    }).then(async (r) => {
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        setCodeError(d?.error || "Failed to set code");
+        return;
+      }
+      setCodeLocked(true);
+    });
   };
 
   const submitGuess = () => {
     const err = validateCode(guess);
     if (err) return setGuessError(err);
     setGuessError("");
-    socket?.emit("makeGuess", { roomId, guess });
-    setGuess("");
+    if (!clientId) return setGuessError("Connecting…");
+    void fetch("/api/game/guess", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ roomId, guess, clientId }),
+    }).then(async (r) => {
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        setGuessError(d?.error || "Failed to submit guess");
+        return;
+      }
+      setGuess("");
+    });
   };
 
   const leaveGame = () => {
-    socket?.emit("leaveGame", { roomId });
+    if (clientId) {
+      void fetch("/api/game/leave", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ roomId, clientId }),
+      });
+    }
     router.push("/");
   };
 
@@ -359,7 +381,7 @@ export default function GameRoom() {
         {/* Two-column boards */}
         <div className="grid grid-cols-2 gap-3">
           {game?.players.map((p) => {
-            const isMe = p.id === socket?.id;
+            const isMe = p.id === clientId;
             return (
               <div key={p.id} className="bg-[var(--color-background-primary)] rounded-xl border border-[var(--color-border-tertiary)] p-3">
                 <div className="flex items-center gap-2 mb-3">

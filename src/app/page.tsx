@@ -2,50 +2,58 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useSocket } from "../context/SocketContext";
+import { useRealtime } from "../context/RealtimeContext";
 import dynamic from "next/dynamic";
 
 const ThemeToggle = dynamic(() => import("@/components/ThemeToggle").then((m) => m.ThemeToggle), { ssr: false });
 
 export default function HomePage() {
-  const { socket, isConnected } = useSocket();
+  const { clientId, isConnected } = useRealtime();
   const router = useRouter();
   const [name, setName] = useState("");
   const [roomId, setRoomId] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState<"create" | "join" | null>(null);
 
-  const createGame = () => {
-    if (!socket || !name.trim()) return setError("Please enter your name");
+  const createGame = async () => {
+    if (!clientId) return setError("Connecting…");
+    if (!name.trim()) return setError("Please enter your name");
     setLoading("create");
     setError("");
-    socket.off("gameCreated");
-    socket.off("gameError");
-    socket.emit("createGame", { name: name.trim() });
-    socket.once("gameCreated", ({ roomId }: { roomId: string }) => {
-      router.push(`/game/${roomId}?name=${encodeURIComponent(name.trim())}&host=true`);
-    });
-    socket.once("gameError", ({ message }: { message: string }) => {
-      setError(message);
+    try {
+      const resp = await fetch("/api/game/create", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), clientId }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data?.error || "Failed to create game");
+      router.push(`/game/${data.roomId}?name=${encodeURIComponent(name.trim())}&host=true`);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to create game");
       setLoading(null);
-    });
+    }
   };
 
-  const joinGame = () => {
-    if (!socket || !name.trim()) return setError("Please enter your name");
+  const joinGame = async () => {
+    if (!clientId) return setError("Connecting…");
+    if (!name.trim()) return setError("Please enter your name");
     if (!roomId.trim()) return setError("Please enter a room code");
     setLoading("join");
     setError("");
-    socket.off("gameStarted");
-    socket.off("gameError");
-    socket.emit("joinGame", { name: name.trim(), roomId: roomId.trim().toUpperCase() });
-    socket.once("gameStarted", ({ roomId: rid }: { roomId: string }) => {
-      router.push(`/game/${rid}?name=${encodeURIComponent(name.trim())}&host=false`);
-    });
-    socket.once("gameError", ({ message }: { message: string }) => {
-      setError(message);
+    try {
+      const resp = await fetch("/api/game/join", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), roomId: roomId.trim().toUpperCase(), clientId }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data?.error || "Failed to join game");
+      router.push(`/game/${data.roomId}?name=${encodeURIComponent(name.trim())}&host=false`);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to join game");
       setLoading(null);
-    });
+    }
   };
 
   return (
