@@ -1,36 +1,123 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CodeHunt
+
+CodeHunt is a real-time 2-player code deduction game (Bulls and Cows style), built with Next.js and Socket.IO.
+
+Players create/join a room, set a secret 4-digit code, and take turns guessing until one player gets all 4 exact digits.
+
+## Features
+
+- Real-time multiplayer room system via Socket.IO
+- Create room / Join room by code
+- Turn-based gameplay with live updates
+- Secret code locking phase for both players
+- Guess feedback (`Bulls` and `Cows` style)
+- Leave-game handling with session-end modal for opponent
+- Light/Dark theme toggle
+- App-wide footer and in-app rules/help
+
+## Game Rules
+
+- Secret code must be exactly 4 digits
+- Digits can be `0-9`
+- Digits must be unique (no repeats)
+- Code cannot start with `0`
+- Players alternate turns
+- First player to get 4 exact matches wins
+
+### Feedback Meaning
+
+- **Bull (exact):** correct digit in the correct position
+- **Cow (misplaced):** correct digit in the wrong position
+
+## Tech Stack
+
+- [Next.js](https://nextjs.org/) (App Router + Pages API route for socket server)
+- [React](https://react.dev/)
+- [TypeScript](https://www.typescriptlang.org/)
+- [Socket.IO](https://socket.io/)
+- [Tailwind CSS](https://tailwindcss.com/)
+
+## Project Structure
+
+```text
+src/
+  app/
+    page.tsx                  # Home screen (create/join game)
+    game/[roomId]/page.tsx    # Game room UI and gameplay flow
+    layout.tsx                # Global providers + app footer
+    globals.css               # Theme tokens and global styles
+  context/
+    SocketContext.tsx         # Socket connection lifecycle
+    ThemeContext.tsx          # Light/dark theme state
+  components/
+    ThemeToggle.tsx           # Theme toggle button
+  pages/api/
+    socket.ts                 # Socket.IO server events/game state
+  types/
+    game.ts
+    next.d.ts
+```
 
 ## Getting Started
 
-First, run the development server:
+### 1) Install dependencies
+
+```bash
+npm install
+```
+
+### 2) Run development server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 3) Lint
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run lint
+```
 
-## Learn More
+## How to Play Locally
 
-To learn more about Next.js, take a look at the following resources:
+1. Open the app in two browser tabs (or two different browsers).
+2. In tab A, enter your name and click **Create a game**.
+3. Copy the room code.
+4. In tab B, enter a name, paste code, and click **Join**.
+5. Both players lock their secret code.
+6. Take turns guessing until someone wins.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Socket Events (Overview)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Client -> Server
 
-## Deploy on Vercel
+- `createGame`
+- `joinGame`
+- `setCode`
+- `makeGuess`
+- `leaveGame`
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Server -> Client
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `gameCreated`
+- `gameStarted`
+- `codeSet`
+- `playPhase`
+- `updateGame`
+- `playerLeft`
+- `sessionEnded`
+- `gameError`
+
+## Notes
+
+- Room state is currently in-memory in the API route process.
+- Restarting the dev server resets active rooms.
+
+## Scripts
+
+- `npm run dev` - run development server
+- `npm run build` - production build
+- `npm run start` - run production server
+- `npm run lint` - run ESLint

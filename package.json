@@ -1,5 +1,5 @@
 {
-  "name": "code-breaker",
+  "name": "code-hunt",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -11,13 +11,16 @@
   "dependencies": {
     "next": "16.2.2",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/socket.io": "^3.0.1",
     "autoprefixer": "^10.4.27",
     "eslint": "^9",
     "eslint-config-next": "16.2.2",

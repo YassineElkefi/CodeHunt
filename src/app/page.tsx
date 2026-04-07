@@ -1,65 +1,137 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useSocket } from "../context/SocketContext";
+import dynamic from "next/dynamic";
+
+const ThemeToggle = dynamic(() => import("@/components/ThemeToggle").then((m) => m.ThemeToggle), { ssr: false });
+
+export default function HomePage() {
+  const { socket, isConnected } = useSocket();
+  const router = useRouter();
+  const [name, setName] = useState("");
+  const [roomId, setRoomId] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState<"create" | "join" | null>(null);
+
+  const createGame = () => {
+    if (!socket || !name.trim()) return setError("Please enter your name");
+    setLoading("create");
+    setError("");
+    socket.off("gameCreated");
+    socket.off("gameError");
+    socket.emit("createGame", { name: name.trim() });
+    socket.once("gameCreated", ({ roomId }: { roomId: string }) => {
+      router.push(`/game/${roomId}?name=${encodeURIComponent(name.trim())}&host=true`);
+    });
+    socket.once("gameError", ({ message }: { message: string }) => {
+      setError(message);
+      setLoading(null);
+    });
+  };
+
+  const joinGame = () => {
+    if (!socket || !name.trim()) return setError("Please enter your name");
+    if (!roomId.trim()) return setError("Please enter a room code");
+    setLoading("join");
+    setError("");
+    socket.off("gameStarted");
+    socket.off("gameError");
+    socket.emit("joinGame", { name: name.trim(), roomId: roomId.trim().toUpperCase() });
+    socket.once("gameStarted", ({ roomId: rid }: { roomId: string }) => {
+      router.push(`/game/${rid}?name=${encodeURIComponent(name.trim())}&host=false`);
+    });
+    socket.once("gameError", ({ message }: { message: string }) => {
+      setError(message);
+      setLoading(null);
+    });
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <div className="flex-1 flex items-center justify-center bg-[var(--color-background-tertiary,#f5f4f0)] p-4">
+      <div className="w-full max-w-sm">
+        <div className="mb-4 flex justify-end">
+          <ThemeToggle />
+        </div>
+        {/* Logo */}
+        <div className="mb-8 text-center">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[color-mix(in_srgb,var(--color-accent)_20%,transparent)] mb-4">
+            <span className="text-2xl font-mono font-bold text-[var(--color-accent)]">CH</span>
+          </div>
+          <h1 className="text-2xl font-medium text-[var(--color-text-primary)]">CodeHunt</h1>
+          <p className="text-sm text-[var(--color-text-secondary)] mt-1">A 2-player code deduction game</p>
+          <p className="text-xs text-[var(--color-text-tertiary)] mt-2" suppressHydrationWarning>
+            {isConnected ? "Online" : "Connecting..."}
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+
+        {/* Card */}
+        <div className="bg-[var(--color-background-primary)] rounded-2xl border border-[var(--color-border-tertiary)] p-6">
+          <label className="block text-xs text-[var(--color-text-tertiary)] uppercase tracking-wider mb-1.5">Your name</label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Enter your name"
+            className="w-full px-3 py-2 text-sm border border-[var(--color-border-secondary)] rounded-lg bg-[var(--color-background-primary)] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)] mb-4 transition-colors"
+            maxLength={20}
+            onKeyDown={(e) => e.key === "Enter" && createGame()}
+          />
+
+          <button
+            onClick={createGame}
+            disabled={loading !== null}
+            className="w-full py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-60 mb-3"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+            {loading === "create" ? "Creating…" : "Create a game"}
+          </button>
+
+          <div className="flex items-center gap-2 my-4">
+            <div className="flex-1 h-px bg-[var(--color-border-tertiary)]" />
+            <span className="text-xs text-[var(--color-text-tertiary)]">or join with a code</span>
+            <div className="flex-1 h-px bg-[var(--color-border-tertiary)]" />
+          </div>
+
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={roomId}
+              onChange={(e) => setRoomId(e.target.value.toUpperCase())}
+              placeholder="Room code"
+              maxLength={5}
+              className="flex-1 px-3 py-2 text-sm border border-[var(--color-border-secondary)] rounded-lg bg-[var(--color-background-primary)] text-[var(--color-text-primary)] font-mono tracking-widest uppercase outline-none focus:border-[var(--color-accent)] transition-colors"
+              onKeyDown={(e) => e.key === "Enter" && joinGame()}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            <button
+              onClick={joinGame}
+              disabled={loading !== null}
+              className="px-4 py-2 bg-[var(--color-background-secondary)] hover:bg-[var(--color-background-secondary)] text-[var(--color-text-primary)] text-sm font-medium rounded-lg border border-[var(--color-border-secondary)] transition-colors disabled:opacity-60"
+            >
+              {loading === "join" ? "Joining…" : "Join"}
+            </button>
+          </div>
+
+          {error && (
+            <p className="mt-3 text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
+          )}
         </div>
-      </main>
+
+        <p className="text-center text-xs text-[var(--color-text-tertiary)] mt-4">
+          4 unique digits · 0–9 · No repeats · No leading 0
+        </p>
+        <details className="mt-3 rounded-xl border border-[var(--color-border-tertiary)] bg-[var(--color-background-primary)] p-4">
+          <summary className="cursor-pointer text-sm font-medium text-[var(--color-text-primary)]">How to play</summary>
+          <div className="mt-3 space-y-2 text-xs text-[var(--color-text-secondary)]">
+            <p>Each player sets a secret 4-digit code using digits 0-9 with no repeats (cannot start with 0).</p>
+            <p>Players alternate turns to guess the opponent code.</p>
+            <p>
+              Feedback uses exact hits (right digit, right spot) and misplaced hits (right digit, wrong spot).
+            </p>
+            <p>First player to get 4 exact hits wins the round.</p>
+          </div>
+        </details>
+      </div>
     </div>
   );
 }
